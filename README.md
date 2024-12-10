@@ -13,7 +13,7 @@ This repository contains a tool that integrates OpenAI-powered assistants to pro
 
 1. Clone this repository to your local machine:
    ```bash
-   git clone [<repo-url>](https://github.com/gastrader/repotalk)
+   git clone https://github.com/gastrader/repotalk
    ```
 2. Install Docker + Docker Compose
 3. Build and run with:
