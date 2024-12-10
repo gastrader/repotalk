@@ -1,0 +1,2092 @@
+
+// ==== file path: repos/gastrader/linkdle/app/layout.tsx
+import type { Metadata } from "next";
+import localFont from "next/font/local";
+import "./globals.css";
+import { Toaster } from "@/components/ui/toaster";
+import { Analytics } from "@vercel/analytics/react";
+
+const geistSans = localFont({
+  src: "./fonts/GeistVF.woff",
+  variable: "--font-geist-sans",
+  weight: "100 900",
+});
+const geistMono = localFont({
+  src: "./fonts/GeistMonoVF.woff",
+  variable: "--font-geist-mono",
+  weight: "100 900",
+});
+const moonlight = localFont({
+  src: "./fonts/Basteleur-Moonlight.woff",
+  variable: "--font-geist-moonlight",
+  weight: "100 900",
+});
+const sixteen = localFont({
+  src: "./fonts/Sixteen.woff2",
+  variable: "--font-sixteen",
+  weight: "100 900",
+});
+
+const lithops = localFont({
+  src: "./fonts/Lithops-Regular.woff",
+  variable: "--font-geist-lithops",
+  weight: "100 900",
+});
+export const metadata: Metadata = {
+  metadataBase: new URL("https://linkdle.net"),
+  openGraph: {
+    title: "Linkdle",
+    description: "A daily puzzle game.",
+    type: "website",
+    url: "https://linkdle.net",
+    images: [
+      {
+        url: "https://linkdle.net/linkdle.png",
+        alt: "Linkdle",
+        type: "image/png",
+      },
+    ],
+  },
+  twitter: {
+    images: "https://linkdle.net/linkdle.png",
+    title: "Linkdle",
+    description: "A daily puzzle game.",
+    card: "summary_large_image",
+  },
+  title: "Linkdle",
+  description: "A daily puzzle game.",
+  creator: "Linkdle",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} ${moonlight.variable} ${lithops.variable} ${sixteen.variable} bg-[#121212] antialiased`}
+      >
+        <main>{children}</main>
+        <Toaster />
+      </body>
+      <Analytics />
+    </html>
+  );
+}
+
+
+
+// ==== file path: repos/gastrader/linkdle/app/page.tsx
+"use client";
+
+import HowTo from "@/components/how-to";
+// import Test from "@/components/test";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import { Cog, ExternalLink, Heart, HelpCircle, User } from "lucide-react";
+import Image from "next/image";
+
+import { useEffect, useState } from "react";
+
+export default function Home() {
+  const [failed, setFailed] = useState<boolean>(false);
+  const [disabled, setDisabled] = useState<boolean>(false);
+  const [shareText, setShareText] = useState("Share");
+  const [won, setWon] = useState<boolean>(false);
+  const [how, setHow] = useState<boolean>(false);
+  const [settings, setSettings] = useState<boolean>(false);
+  const [about, setAbout] = useState<boolean>(false);
+  const [extremeMode, setExtremeMode] = useState<boolean>(false);
+
+  const words = [
+    { word: "STONE" },
+    { word: "AGE" },
+    { word: "GROUP" },
+    { word: "CHAT" },
+    { word: "ROOM" },
+    { word: "SERVICE" },
+  ];
+  const firstWord = "GEM";
+  const STATIC_INCREMENT = 51000;
+
+  const [guessTracker, setGuessTracker] = useState<("🟩" | "🟥" | null)[][]>(
+    words.map(({ word }) => Array(word.length).fill(null))
+  );
+
+  useEffect(() => {
+    const storedExtremeMode = localStorage.getItem("extremeMode");
+    if (storedExtremeMode) {
+      setExtremeMode(false);
+      // setExtremeMode(JSON.parse(storedExtremeMode));
+    }
+  }, []);
+  const toggleExtremeMode = () => {
+    const newMode = !extremeMode;
+    setExtremeMode(newMode);
+    localStorage.setItem("extremeMode", JSON.stringify(newMode));
+  };
+
+  // Initialize state
+  const initialRevealedWords = words.map(({ word }) =>
+    word
+      .split("")
+      .map((letter, index) => (index === 0 ? letter.toUpperCase() : "_"))
+  );
+
+  const [revealedWords, setRevealedWords] =
+    useState<string[][]>(initialRevealedWords);
+  const [activeWordIndex, setActiveWordIndex] = useState(0);
+  const [userGuess, setUserGuess] = useState("");
+  const { toast } = useToast();
+  const [shakingLetterIndex, setShakingLetterIndex] = useState<number | null>(
+    null
+  );
+  const [lives, setLives] = useState(3);
+
+  const handleGuess = () => {
+    const word = words[activeWordIndex].word.toUpperCase();
+    const updatedRevealedWord = [...revealedWords[activeWordIndex]];
+    const updatedGuessTracker = [...guessTracker];
+    const trimmedGuess = userGuess.trim().toUpperCase();
+    if (trimmedGuess === word) {
+      toast({
+        variant: "success",
+        description: `Congratulations! You guessed the word correctly!`,
+        duration: 2000,
+      });
+      updatedGuessTracker[activeWordIndex] = updatedGuessTracker[
+        activeWordIndex
+      ].map((guess) => (guess === null ? "🟩" : guess));
+      setRevealedWords((prevRevealedWords) =>
+        prevRevealedWords.map((rw, i) =>
+          i === activeWordIndex ? word.split("") : rw
+        )
+      );
+
+      if (activeWordIndex < words.length - 1) {
+        setActiveWordIndex(activeWordIndex + 1);
+      } else if (activeWordIndex === words.length - 1) {
+        console.log("THE USER HAS WON");
+        setWon(true);
+        setIsWinDialogOpen(true);
+        setUserGuess("");
+        saveGameState(false, true);
+
+        setDisabled(true);
+        return;
+      }
+      //check if user won
+    } else {
+      // If the guess is incorrect, decrease lives
+      setLives(lives - 1);
+      const nextUnrevealedIndex = updatedRevealedWord.indexOf("_");
+      if (nextUnrevealedIndex !== -1) {
+        updatedRevealedWord[nextUnrevealedIndex] = word[nextUnrevealedIndex];
+        updatedGuessTracker[activeWordIndex][nextUnrevealedIndex] = "🟥";
+        setShakingLetterIndex(nextUnrevealedIndex);
+
+        setTimeout(() => {
+          setShakingLetterIndex(null);
+        }, 1000);
+      }
+
+      const firstTwoLetters = words[activeWordIndex].word
+        .slice(0, nextUnrevealedIndex + 1)
+        .toUpperCase();
+      setUserGuess(firstTwoLetters);
+
+      setRevealedWords((prevRevealedWords) =>
+        prevRevealedWords.map((rw, i) =>
+          i === activeWordIndex ? updatedRevealedWord : rw
+        )
+      );
+
+      // Check if the word is fully revealed
+      if (
+        updatedRevealedWord.indexOf("_") === -1 &&
+        activeWordIndex < words.length - 1
+      ) {
+        setActiveWordIndex(activeWordIndex + 1);
+      }
+
+      // Check if lives have reached zero
+      if (lives <= 1) {
+        setFailed(true);
+        saveGameState(true, false);
+
+        setDisabled(true);
+        setActiveWordIndex(words.length);
+      }
+    }
+    setGuessTracker(updatedGuessTracker);
+    // console.log("YOU HAVE:", failed);
+  };
+  const renderGuessTrackerWon = () => {
+    return [
+      // First word (all green)
+      <div key="firstWord" className="flex -mb-0.5 tracking-tighter">
+        {Array(firstWord.length)
+          .fill("🟩")
+          .map((square, index) => (
+            <span key={index}>{square}</span>
+          ))}
+      </div>,
+      // Rest of the words
+      ...guessTracker.map((wordGuesses, index) => (
+        <div key={index + 1} className="flex -mb-0.5 tracking-tighter">
+          {wordGuesses.map((guess, guessIndex) => (
+            <span key={guessIndex}>{guess || "🟩"}</span>
+          ))}
+        </div>
+      )),
+    ];
+  };
+  const renderGuessTrackerLost = () => {
+    return [
+      // First word (all green)
+      <div key="firstWord" className="flex -mb-0.5 tracking-tighter">
+        {Array(firstWord.length)
+          .fill("🟩")
+          .map((square, index) => (
+            <span key={index}>{square}</span>
+          ))}
+      </div>,
+      // Rest of the words
+      ...words.map((word, index) => (
+        <div key={index + 1} className="flex -mb-0.5 tracking-tighter">
+          {word.word.split("").map((letter, letterIndex) => (
+            <span key={letterIndex}>
+              {letterIndex === 0
+                ? "🟩"
+                : guessTracker[index][letterIndex] || "⬜"}
+            </span>
+          ))}
+        </div>
+      )),
+    ];
+  };
+  const handleKeyPress = (key: string) => {
+    if (disabled) return;
+
+    if (key === "Enter") {
+      handleGuess();
+    } else if (key === "Backspace") {
+      setUserGuess((prev) => prev.slice(0, -1));
+    } else if (/^[A-Z]$/.test(key)) {
+      setUserGuess((prev) =>
+        (prev + key).slice(0, words[activeWordIndex].word.length)
+      );
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userGuess, disabled]);
+
+  const handleKeyDown = (event: { key: string }) => {
+    if (disabled) return;
+
+    const key = event.key.toUpperCase();
+
+    if (key === "ENTER") {
+      handleGuess();
+    } else if (key === "BACKSPACE") {
+      setUserGuess((prev) => {
+        const minLength = words[activeWordIndex].word[0].length;
+        return prev.length > minLength ? prev.slice(0, -1) : prev;
+      });
+    } else if (/^[A-Z]$/.test(key)) {
+      setUserGuess((prev) =>
+        (prev + key).slice(0, words[activeWordIndex].word.length)
+      );
+    }
+  };
+
+  const getEmojiBoard = () => {
+    return [
+      // First word (all green)
+      Array(firstWord.length).fill("🟩").join(""),
+      // Rest of the words
+      ...words.map((word, index) =>
+        word.word
+          .split("")
+          .map((letter, letterIndex) =>
+            letterIndex === 0
+              ? "🟩"
+              : guessTracker[index][letterIndex] || (won ? "🟩" : "⬜")
+          )
+          .join("")
+      ),
+    ].join("\n");
+  };
+
+  const handleShareBoardWin = async () => {
+    const emojiBoard = getEmojiBoard();
+    const shareText = `I beat the Linkdle today!\n\n${emojiBoard}\n\nPlay at: https://linkdle.net`;
+
+    try {
+      await navigator.clipboard.writeText(shareText);
+      toast({
+        title: "Copied to clipboard!",
+        description: "You can now paste your result to share.",
+        duration: 3000,
+      });
+      setShareText("Copied!");
+      setTimeout(() => setShareText("Share"), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+      toast({
+        title: "Failed to copy",
+        description: "Please try again or copy manually.",
+        variant: "destructive",
+        duration: 3000,
+      });
+    }
+  };
+  const handleShareBoard = async () => {
+    const emojiBoard = getEmojiBoard();
+    const shareText = `Linkdle beat me today...\n\n${emojiBoard}\n\nPlay at: https://linkdle.net`;
+
+    try {
+      await navigator.clipboard.writeText(shareText);
+      toast({
+        title: "Copied to clipboard!",
+        description: "You can now paste your result to share.",
+        duration: 3000,
+      });
+      setShareText("Copied!");
+      setTimeout(() => setShareText("Share"), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+      toast({
+        title: "Failed to copy",
+        description: "Please try again or copy manually.",
+        variant: "destructive",
+        duration: 3000,
+      });
+    }
+  };
+  const handleShare = async () => {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareText("Copied!");
+      setTimeout(() => setShareText("Share"), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+    }
+  };
+
+  const revealAllWords = () => {
+    const fullyRevealedWords = words.map(({ word }) => word.split(""));
+    setRevealedWords(fullyRevealedWords);
+  };
+
+  useEffect(() => {
+    const gameData = JSON.parse(localStorage.getItem("gameState") || "{}");
+    const storedGameNumber = gameData.number || 0;
+    const currentGameNumber = STATIC_INCREMENT;
+    console.log("gamedata is:", gameData);
+    if (currentGameNumber > storedGameNumber) {
+      // It's a new game day
+      setWon(false);
+      setFailed(false);
+      setDisabled(false);
+      setActiveWordIndex(0);
+      setLives(3);
+    } else {
+      // It's still the same game day
+      setWon(gameData.won);
+      setIsWinDialogOpen(gameData.won);
+      setFailed(gameData.failed);
+      setIsFailedDialogOpen(gameData.failed);
+      setDisabled(true);
+      revealAllWords();
+      setLives(gameData.lives);
+      setGuessTracker(gameData.guessTracker);
+    }
+    if (!gameData.number) {
+      console.log("We are in here:", gameData.number);
+      setHow(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (words[activeWordIndex]) {
+      setUserGuess(words[activeWordIndex].word[0].toUpperCase());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWordIndex]);
+
+  const saveGameState = (failedHere: boolean, wonHere: boolean) => {
+    const gameState = {
+      number: STATIC_INCREMENT,
+      won: wonHere,
+      failed: failedHere,
+      guessTracker,
+      activeWordIndex,
+      lives,
+    };
+    localStorage.setItem("gameState", JSON.stringify(gameState));
+  };
+  const [isFailedDialogOpen, setIsFailedDialogOpen] = useState(failed);
+  useEffect(() => {
+    setIsFailedDialogOpen(failed);
+  }, [failed]);
+
+  const [isWinDialogOpen, setIsWinDialogOpen] = useState(won);
+  useEffect(() => {
+    setIsWinDialogOpen(won);
+  }, [won]);
+  return (
+    <div className=" grid mx-auto items-center justify-items-center min-h-screen pt-10 lg:p-8 p-0 lg:pb-20 pb-10  sm:p-20 font-[family-name:var(--font-geist-sans)] bg-[#121212] text-white w-fit lg:w-full">
+      <main className="flex flex-col   items-center sm:items-center w-fit ">
+        <h1 className="font-extrabold text-6xl tracking-tighter w-fit text-center relative px-12 pb-8">
+          LINKDLE
+          {extremeMode && (
+            <span className="absolute top-0 right-0 bg-red-500 text-white py-1 rounded-full text-xs  w-[80px] text-center tracking-tight rotate-[30deg] ">
+              EXTREME
+            </span>
+          )}
+        </h1>
+        <div className="flex gap-2 items-center justify-center w-fit pb-8">
+          <div className="text-xl font-bold">Lives:</div>
+          <div className="flex flex-row gap-2 scale-x-[-1]">
+            {Array.from({ length: 3 }, (_, index) => (
+              <Heart
+                key={index}
+                className={`h-6 w-6 rounded-full ${
+                  lives > index ? "text-red-500" : "text-gray-400"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="w-3/4 items-center flex justify-center align-middle  flex-col pb-8">
+          <div className="flex flex-col gap-y-4 gap-x-1 justify-start items-start">
+            <div className="flex gap-2">
+              {firstWord.split("").map((letter, index) => (
+                <div
+                  key={index}
+                  className="lg:text-4xl text-2xl font-bold border border-[#3a3a3a] px-2 py-1 lg:h-[50px] lg:w-[50px] h-10 w-10 text-center"
+                >
+                  {letter}
+                </div>
+              ))}
+            </div>
+
+            {revealedWords.map((revealedWord, wordIndex) => (
+              <div key={wordIndex} className="flex gap-2">
+                {revealedWord.map((letter, letterIndex) => (
+                  <div key={letterIndex} className="relative">
+                    <div
+                      className={`lg:text-4xl text-2xl font-bold px-2 py-1 lg:h-[50px] lg:w-[50px] h-10 w-10 text-center border border-[#3a3a3a] ${
+                        revealedWord.join("") ===
+                        words[wordIndex].word.toUpperCase()
+                          ? "text-emerald-500"
+                          : shakingLetterIndex === letterIndex &&
+                            activeWordIndex === wordIndex
+                          ? "text-red-500 shake"
+                          : extremeMode && letter === "_"
+                          ? "invisible"
+                          : ""
+                      }`}
+                    >
+                      {letter !== "_" ? letter : ""}
+                    </div>
+                    {wordIndex === activeWordIndex && letter === "_" && (
+                      <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center text-2xl lg:text-4xl font-bold text-gray-500">
+                        {userGuess[letterIndex] || ""}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="keyboard">
+          {[
+            ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+            ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+            ["Enter", "Z", "X", "C", "V", "B", "N", "M", "Backspace"],
+          ].map((row, rowIndex) => (
+            <div
+              key={rowIndex}
+              className={`keyboard-row ${
+                rowIndex === 1 ? "px-4" : rowIndex === 2 ? "last" : "first"
+              }`}
+            >
+              {row.map((key) => (
+                <button
+                  key={key}
+                  className="key"
+                  onClick={() => handleKeyPress(key)}
+                  disabled={disabled}
+                >
+                  {key === "Backspace" ? (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      width="24"
+                    >
+                      <path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7.07L2.4 12l4.66-7H22v14zm-11.59-2L14 13.41 17.59 17 19 15.59 15.41 12 19 8.41 17.59 7 14 10.59 10.41 7 9 8.41 12.59 12 9 15.59z"></path>
+                    </svg>
+                  ) : (
+                    key
+                  )}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+        {/* <Test /> */}
+
+        {/* <div className="flex gap-4 items-center flex-col sm:flex-row w-fit justify-center">
+          <input
+            ref={inputRef}
+            type="text"
+            id="userGuess"
+            value={userGuess}
+            onSubmit={handleGuess}
+            onChange={(e) => setUserGuess(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleGuess();
+              }
+            }}
+            className="border rounded-md px-2 py-1 text-lg text-black w-[200px]"
+            placeholder="Guess the full word"
+            disabled={activeWordIndex >= words.length || failed || disabled}
+          />
+          <Button
+            id="submit"
+            onClick={handleGuess}
+            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
+            disabled={failed || userGuess === "" || disabled}
+          >
+            Submit
+          </Button>
+        </div> */}
+
+        <Dialog open={isFailedDialogOpen} onOpenChange={setIsFailedDialogOpen}>
+          <DialogContent className="sm:max-w-[425px] w-5/6 sm:p-6 py-6 sm:py-6 px-14 rounded-md">
+            <DialogHeader>
+              <DialogTitle className="text-red-600">Game Over!</DialogTitle>
+              <DialogDescription>
+                <div className="flex-flex-col">
+                  <div className="text-base text-black">
+                    You&apos;ve run out of lives.
+                  </div>
+                  <div>Here&apos;s how you did:</div>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mb-2">{renderGuessTrackerLost()}</div>
+            <DialogFooter>
+              <div className="w-full flex justify-between">
+                <div className="">
+                  <Button
+                    variant="default"
+                    type="button"
+                    onClick={handleShareBoard}
+                    className="gap-2 flex"
+                  >
+                    <Image
+                      aria-hidden
+                      src="/globe.svg"
+                      alt="Globe icon"
+                      width={16}
+                      height={16}
+                    />
+                    {shareText}
+                  </Button>
+                </div>
+                <Button
+                  variant="destructive"
+                  type="button"
+                  onClick={() => {
+                    revealAllWords();
+                    setIsFailedDialogOpen(false);
+                    setDisabled(true);
+                  }}
+                >
+                  Reveal
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isWinDialogOpen} onOpenChange={setIsWinDialogOpen}>
+          <DialogContent className="sm:max-w-[425px] w-5/6 sm:p-6 py-6 sm:py-6 px-14 rounded-md">
+            <DialogHeader>
+              <DialogTitle className="text-emerald-600">You Win!</DialogTitle>
+              <DialogDescription>
+                <div className="flex flex-col">
+                  <div className="text-base text-black">
+                    You have linked all of the words together.{" "}
+                  </div>
+                  <div>Here&apos;s your performance:</div>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <div className=" mb-2">{renderGuessTrackerWon()}</div>
+            <DialogFooter>
+              <div className="w-full flex justify-between">
+                <div className="">
+                  <Button
+                    variant="default"
+                    type="button"
+                    onClick={handleShareBoardWin}
+                    className="flex gap-2"
+                  >
+                    <Image
+                      aria-hidden
+                      src="/globe.svg"
+                      alt="Globe icon"
+                      width={16}
+                      height={16}
+                    />
+                    {shareText}
+                  </Button>
+                </div>
+                <Button
+                  variant="default"
+                  type="button"
+                  onClick={() => {
+                    setIsWinDialogOpen(false);
+                    setUserGuess("");
+                    setDisabled(true);
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={how} onOpenChange={setHow}>
+          <DialogContent className="sm:max-w-[425px] w-5/6 sm:p-6 px-0 py-6 sm:py-6 rounded-md">
+            <DialogHeader>
+              <DialogTitle className="text-black font-extrabold text-xl ">
+                How to Play
+              </DialogTitle>
+              <DialogDescription>
+                <div className="flex flex-col items-center justify-center w-fit h-full gap-2 p-4 px-8 py-6  z-50 ">
+                  <HowTo></HowTo>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="w-full items-center justify-center ">
+              <Button
+                className="w-fit "
+                variant="default"
+                type="button"
+                onClick={() => {
+                  setHow(false);
+                }}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={settings} onOpenChange={setSettings}>
+          <DialogContent className="sm:max-w-[425px] w-5/6 sm:p-6 py-6 sm:py-6 px-4 rounded-md">
+            <DialogHeader>
+              <DialogTitle className="text-black font-extrabold text-xl">
+                Settings
+              </DialogTitle>
+              <DialogDescription>
+                <div className="flex flex-row justify-between rounded-lg p-3 border shadow-sm items-center space-y-2 mt-4">
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-medium leading-none text-start">
+                      Extreme Mode
+                    </div>
+                    <div className="text-[0.7rem] text-muted-foreground">
+                      Length of words will be hidden
+                    </div>
+                  </div>
+                  <Switch
+                    id="extreme-mode"
+                    checked={extremeMode}
+                    onCheckedChange={toggleExtremeMode}
+                    disabled
+                  />
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="default"
+                type="button"
+                onClick={() => {
+                  setSettings(false);
+                }}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={about} onOpenChange={setAbout}>
+          <DialogContent className="sm:max-w-[425px] w-5/6 sm:p-6 py-6 sm:py-6 px-4 rounded-md">
+            <DialogHeader>
+              <DialogTitle>About Me</DialogTitle>
+              <DialogDescription className="flex flex-row gap-1 pt-2">
+                Find more of my work at{" "}
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href="https://plumega.com"
+                  className="underline  flex-row flex gap-1"
+                >
+                  Plumega.com <ExternalLink className="w-5 h-5" />
+                </a>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4"></div>
+            <DialogFooter>
+              <Button
+                variant="default"
+                type="button"
+                onClick={() => {
+                  setAbout(false);
+                }}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </main>
+      <footer className="flex lg:gap-4 gap-3 flex-wrap items-center justify-center w-fit pt-8">
+        <Button
+          className="flex items-center gap-2 hover:underline hover:underline-offset-4 w-fit text-gray-300"
+          onClick={() => setHow(true)}
+        >
+          <HelpCircle className="w-[20px] h-[20px] text-gray-500" />
+          How to Play
+        </Button>
+        <Button
+          className="flex items-center gap-2 hover:underline hover:underline-offset-4 w-fit text-gray-300"
+          onClick={() => setSettings(true)}
+        >
+          <Cog className="w-[20px] h-[20px] text-gray-500" />
+          Settings
+        </Button>
+        {won ? (
+          <Button
+            variant="default"
+            type="button"
+            onClick={handleShareBoardWin}
+            className="gap-2 flex"
+          >
+            {" "}
+            <Image
+              aria-hidden
+              src="/globe.svg"
+              alt="Globe icon"
+              width={16}
+              height={16}
+            />
+            {shareText}
+          </Button>
+        ) : failed ? (
+          <Button
+            variant="default"
+            type="button"
+            onClick={handleShareBoard}
+            className="flex gap-2"
+          >
+            <Image
+              aria-hidden
+              src="/globe.svg"
+              alt="Globe icon"
+              width={16}
+              height={16}
+            />
+            {shareText}
+          </Button>
+        ) : (
+          <Button
+            className="flex items-center gap-2 w-fit hover:underline hover:underline-offset-4 text-gray-300"
+            onClick={handleShare}
+            style={{ width: "100px" }}
+          >
+            <Image
+              aria-hidden
+              src="/globe.svg"
+              alt="Globe icon"
+              width={16}
+              height={16}
+            />
+            {shareText}
+          </Button>
+        )}
+        <Button
+          className="flex items-center gap-2 hover:underline hover:underline-offset-4 w-fit text-gray-300"
+          onClick={() => setAbout(true)}
+        >
+          <User className="w-[20px] h-[20px] text-gray-500" />
+          About
+        </Button>
+      </footer>
+    </div>
+  );
+}
+
+
+
+// ==== file path: repos/gastrader/linkdle/app/test/page.tsx
+"use client";
+import Image from "next/image";
+import React from "react";
+
+const Page = () => {
+  return (
+    <div className="bg-slate-50 h-screen justify-center flex">
+      <div className=" grid grid-cols-3 max-w-3xl">
+        <Image
+          src="./git.svg"
+          alt=""
+          width={0}
+          height={0}
+          sizes="100vw"
+          style={{ width: "100%", height: "auto" }}
+        ></Image>
+        <div className="mt-20 col-span-2">
+          <a
+            target="_blank"
+            rel="noreferrer"
+            className="mb-4 bg-neutral-50 text-base interact-bounce border-neutral-200 px-4 py-2 rounded-xl  flex items-center justify-between border"
+            href="https://x.com/evanjconrad/status/1836169634552447219"
+          >
+            Announcing  Beta
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              aria-hidden="true"
+              data-slot="icon"
+              className="h-4 w-4"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"
+              ></path>
+            </svg>
+          </a>
+          <div className="mb-8">
+            <h1 className="text-2xl font-serif pb-4 ">
+              The  Company
+            </h1>
+            <p className="pb-2 text-base">
+              We run a gaming company concerned with agentic operation of swarms.
+            </p>
+            <p className="pb-2 text-base">
+              We sell compute by the hour, not by the year. This way the agents can warm up to the idea of being used for enterprise value creation.
+            </p>
+            <div className="flex flex-wrap pt-4 gap-2">
+              <div className="flex flex-col gap-2 w-full">
+                <a className="btn-big-blue w-full" href="/signup">
+                  Get a swarm at $0.75/agent/hr
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                    data-slot="icon"
+                    className="h-4 w-4"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="m12.75 15 3-3m0 0-3-3m3 3h-7.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                    ></path>
+                  </svg>
+                </a>
+                <div className="text-xs text-neutral-500">
+                  *Prices are from the linkdle beta and may increase
+                  over the coming months.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Page;
+
+
+
+// ==== file path: repos/gastrader/linkdle/components/how-to.tsx
+import React from 'react'
+
+const HowTo = () => {
+  return (
+    <div className=''>
+      <p className="text-xl font-bold  text-center text-black">
+        Connect the words using a chain of two word phrases.
+      </p>
+      <div className="flex flex-col gap-2 scale-75">
+        <div className="flex flex-row gap-1.5 ">
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">P</span>
+          </div>
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">E</span>
+          </div>
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">A</span>
+          </div>
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">N</span>
+          </div>
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">U</span>
+          </div>
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">T</span>
+          </div>
+        </div>
+        <div className="flex flex-row gap-1.5 ">
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">B</span>
+          </div>
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">U</span>
+          </div>
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">T</span>
+          </div>
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">T</span>
+          </div>
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">E</span>
+          </div>
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">R</span>
+          </div>
+        </div>
+        <div className="flex flex-row gap-1.5 ">
+          <div className="bg-green-600 border-b-[4px] border-b-green-800  h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">K</span>
+          </div>
+          <div className=" border-[3px] border-stone-700 h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 zoom-in">N</span>
+          </div>
+          <div className=" border-[3px] border-stone-700 h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 zoom-in">I</span>
+          </div>
+          <div className=" border-[3px] border-stone-700 h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 zoom-in">F</span>
+          </div>
+
+          <div className=" border-[3px] border-sky-600 h-14  flex items-center justify-center w-10 text-3xl font-semibold uppercase rounded-md ">
+            <span className="select-none duration-100 ">E</span>
+          </div>
+        </div>
+      </div>
+      <p className="text-left mb-2 text-black">
+        The game begins with a list of words, where only the first letter of
+        each word is visible. The first word is fully revealed to the players..
+      </p>
+      <p className=" text-left w-full mb-2 text-black">
+        Each subsequent word is related to the word above it through a common
+        phrase/concept:
+      </p>
+      <ol className="list-decimal list-inside text-base  text-left w-full">
+        <li className="font-bold">
+          <span className="text-red-400">PEANUT</span>{" "}
+          <span className="text-green-400">BUTTER</span>
+        </li>
+        <li className="font-bold">
+          <span className="text-green-400">BUTTER</span>{" "}
+          <span className="text-blue-400">KNIFE</span>
+        </li>
+      </ol>
+      
+    </div>
+  );
+}
+
+export default HowTo
+
+
+
+// ==== file path: repos/gastrader/linkdle/components/test.tsx
+import Image from 'next/image';
+import React from 'react'
+
+const Test = () => {
+  return (
+    <div className="w-full max-w-[608px] relative aspect-square mx-auto careers-hero-sphere pointer-events-none">
+      <div className="absolute left-0 top-0 w-full h-full duration-1000 transition-all">
+        <svg
+          width="100%"
+          height="100%"
+          style={{
+            fontSize: "10px",
+            fontFamily: "monospace",
+            position: "absolute",
+          }}
+        >
+          <defs>
+            <mask id="ascii-mask-1171" x="0" y="0" width="100%" height="100%">
+              <rect fill="white" x="0" y="0" width="100%" height="100%"></rect>
+              <text textAnchor="middle" x="50%" dy="-1px">
+                <tspan x="50%" y="9.9px">
+                  0100011001101111011100100010000001000111011011110110010000100000011100110110111100100000011011000110111101110110011001010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1100100001000000111010001101000011001010010000001110111011011110111001001101100011001000010000001110100011010000110000101
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1101000010000001101000011001010010000001100111011000010111011001100101001000000110100001101001011100110010000001101111011
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0111001100101001000000110000101101110011001000010000001101111011011100110110001111001001000000101001101101111011011100010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1100001000000111010001101000011000010111010000100000011101110110100001101111011001010111011001100101011100100010000001100
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0100110010101101100011010010110010101110110011001010111001100100000011010010110111000100000011010000110100101101101001000
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0001110011011010000110000101101100011011000010000001101110011011110111010000100000011100000110010101110010011010010111001
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1011010000010000001100010011101010111010000100000011010000110000101110110011001010010000001100101011101000110010101110010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0110111001100001011011000010000001101100011010010110011001100101001000000100011001101111011100100010000001000111011011110
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1100100001000000111001101101111001000000110110001101111011101100110010101100100001000000111010001101000011001010010000001
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1101110110111101110010011011000110010000100000011101000110100001100001011101000010000001101000011001010010000001100111011
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0000101110110011001010010000001101000011010010111001100100000011011110110111001100101001000000110000101101110011001000010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0000011011110110111001101100011110010010000001010011011011110110111000101100001000000111010001101000011000010111010000100
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0000111011101101000011011110110010101110110011001010111001000100000011000100110010101101100011010010110010101110110011001
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0101110011001000000110100101101110001000000110100001101001011011010010000001110011011010000110000101101100011011000010000
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0011011100110111101110100001000000111000001100101011100100110100101110011011010000010000001100010011101010111010000100000
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0110100001100001011101100110010100100000011001010111010001100101011100100110111001100001011011000010000001101100011010010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1100110011001010010000001000110011011110111001000100000010001110110111101100100001000000111001101101111001000000110110001
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1011110111011001100101011001000010000001110100011010000110010100100000011101110110111101110010011011000110010000100000011
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1010001101000011000010111010000100000011010000110010100100000011001110110000101110110011001010010000001101000011010010111
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0011001000000110111101101110011001010010000001100001011011100110010000100000011011110110111001101100011110010010000001010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0110110111101101110001011000010000001110100011010000110000101110100001000000111011101101000011011110110010101110110011001
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0101110010001000000110001001100101011011000110100101100101011101100110010101110011001000000110100101101110001000000110100
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0011010010110110100100000011100110110100001100001011011000110110000100000011011100110111101110100001000000111000001100101
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0111001001101001011100110110100000100000011000100111010101110100001000000110100001100001011101100110010100100000011001010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1110100011001010111001001101110011000010110110000100000011011000110100101100110011001010010000001000110011011110111001000
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1000000100011101101111011001000010000001110011011011110010000001101100011011110111011001100101011001000010000001110100011
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0100001100101001000000111011101101111011100100110110001100100001000000111010001101000011000010111010000100000011010000110
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0101001000000110011101100001011101100110010100100000011010000110100101110011001000000110111101101110011001010010000001100
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0010110111001100100001000000110111101101110011011000111100100100000010100110110111101101110001011000010000001110100011010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0001100001011101000010000001110111011010000110111101100101011101100110010101110010001000000110001001100101011011000110100
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1011001010111011001100101011100110010000001101001011011100010000001101000011010010110110100100000011100110110100001100001
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0110110001101100001000000110111001101111011101000010000001110000011001010111001001101001011100110110100000100000011000100
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1110101011101000010000001101000011000010111011001100101001000000110010101110100011001010111001001101110011000010110110000
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1000000110110001101001011001100110010100100000010001100110111101110010001000000100011101101111011001000010000001110011011
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0111100100000011011000110111101110110011001010110010000100000011101000110100001100101001000000111011101101111011100100110
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1100011001000010000001110100011010000110000101110100001000000110100001100101001000000110011101100001011101100110010100100
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0000110100001101001011100110010000001101111011011100110010100100000011000010110111001100100001000000110111101101110011011
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0001111001001000000101001101101111011011100010110000100000011101000110100001100001011101000010000001110111011010000110111
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1011001010111011001100101011100100010000001100010011001010110110001101001011001010111011001100101011100110010000001101001
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0110111000100000011010000110100101101101001000000111001101101000011000010110110001101100001000000110111001101111011101000
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0100000011100000110010101110010011010010111001101101000001000000110001001110101011101000010000001101000011000010111011001
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1001010010000001100101011101000110010101110010011011100110000101101100001000000110110001101001011001100110010100100000010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0011001101111011100100010000001000111011011110110010000100000011100110110111100100000011011000110111101110110011001010110
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0100001000000111010001101000011001010010000001110111011011110111001001101100011001000010000001110100011010000110000101110
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1000010000001101000011001010010000001100111011000010111011001100101001000000110100001101001011100110010000001101111011011
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1001100101001000000110000101101110011001000010000001101111011011100110110001111001001000000101001101101111011011100010110
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0001000000111010001101000011000010111010000100000011101110110100001101111011001010111011001100101011100100010000001100010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0110010101101100011010010110010101110110011001010111001100100000011010010110111000100000011010000110100101101101001000000
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1110011011010000110000101101100011011000010000001101110011011110111010000100000011100000110010101110010011010010111001101
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1010000010000001100010011101010111010000100000011010000110000101110110011001010010000001100101011101000110010101110010011
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0111001100001011011000010000001101100011010010110011001100101001000000100011001101111011100100010000001000111011011110110
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0100001000000111001101101111001000000110110001101111011101100110010101100100001000000111010001101000011001010010000001110
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1110110111101110010011011000110010000100000011101000110100001100001011101000010000001101000011001010010000001100111011000
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0101110110011001010010000001101000011010010111001100100000011011110110111001100101001000000110000101101110011001000010000
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0011011110110111001101100011110010010000001010011011011110110111000101100001000000111010001101000011000010111010000100000
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0111011101101000011011110110010101110110011001010111001000100000011000100110010101101100011010010110010101110110011001010
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1110011001000000110100101101110001000000110100001101001011011010010000001110011011010000110000101101100011011000010000001
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  1011100110111101110100001000000111000001100101011100100110100101110011011010000010000001100010011101010111010000100000011
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0100001100001011101100110010100100000011001010111010001100101011100100110111001100001011011000010000001101100011010010110
+                </tspan>
+                <tspan x="50%" dy="10px">
+                  0110011001010010000001000110011011110111001000100000010001110110111101100100001000000111001101101111001000000110110001101
+                </tspan>
+                <tspan x="50%" dy="10px"></tspan>
+              </text>
+            </mask>
+          </defs>
+          <rect
+            style={{
+              mask: "url(#ascii-mask-1171)",
+              fill: "#121212",
+              opacity: 1,
+            }}
+            x="0"
+            y="0"
+            width="100%"
+            height="100%"
+          ></rect>
+        </svg>
+        <Image src="/test3.gif" alt="" width={600} height={600}></Image>
+      </div>
+    </div>
+  );
+}
+
+export default Test
+
+
+
+// ==== file path: repos/gastrader/linkdle/components/ui/badge.tsx
+import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
+
+import { cn } from "@/lib/utils"
+
+const badgeVariants = cva(
+  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  {
+    variants: {
+      variant: {
+        default:
+          "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
+        secondary:
+          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        destructive:
+          "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
+        outline: "text-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+)
+
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof badgeVariants> {}
+
+function Badge({ className, variant, ...props }: BadgeProps) {
+  return (
+    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+  )
+}
+
+export { Badge, badgeVariants }
+
+
+
+// ==== file path: repos/gastrader/linkdle/components/ui/button.tsx
+import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { cva, type VariantProps } from "class-variance-authority"
+
+import { cn } from "@/lib/utils"
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        default:
+          "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        outline:
+          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+        secondary:
+          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-9 px-4 py-2",
+        sm: "h-8 rounded-md px-3 text-xs",
+        lg: "h-10 rounded-md px-8",
+        icon: "h-9 w-9",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean
+}
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button"
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Button.displayName = "Button"
+
+export { Button, buttonVariants }
+
+
+
+// ==== file path: repos/gastrader/linkdle/components/ui/card.tsx
+import * as React from "react"
+
+import { cn } from "@/lib/utils"
+
+const Card = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "rounded-xl border bg-card text-card-foreground shadow",
+      className
+    )}
+    {...props}
+  />
+))
+Card.displayName = "Card"
+
+const CardHeader = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    {...props}
+  />
+))
+CardHeader.displayName = "CardHeader"
+
+const CardTitle = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLHeadingElement>
+>(({ className, ...props }, ref) => (
+  <h3
+    ref={ref}
+    className={cn("font-semibold leading-none tracking-tight", className)}
+    {...props}
+  />
+))
+CardTitle.displayName = "CardTitle"
+
+const CardDescription = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLParagraphElement>
+>(({ className, ...props }, ref) => (
+  <p
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
+))
+CardDescription.displayName = "CardDescription"
+
+const CardContent = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+))
+CardContent.displayName = "CardContent"
+
+const CardFooter = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex items-center p-6 pt-0", className)}
+    {...props}
+  />
+))
+CardFooter.displayName = "CardFooter"
+
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
+
+
+
+// ==== file path: repos/gastrader/linkdle/components/ui/dialog.tsx
+"use client"
+
+import * as React from "react"
+import * as DialogPrimitive from "@radix-ui/react-dialog"
+import { Cross2Icon } from "@radix-ui/react-icons"
+
+import { cn } from "@/lib/utils"
+
+const Dialog = DialogPrimitive.Root
+
+const DialogTrigger = DialogPrimitive.Trigger
+
+const DialogPortal = DialogPrimitive.Portal
+
+const DialogClose = DialogPrimitive.Close
+
+const DialogOverlay = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Overlay
+    ref={ref}
+    className={cn(
+      "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      className
+    )}
+    {...props}
+  />
+))
+DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
+
+const DialogContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay />
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <Cross2Icon className="h-4 w-4" />
+        <span className="sr-only">Close</span>
+      </DialogPrimitive.Close>
+    </DialogPrimitive.Content>
+  </DialogPortal>
+))
+DialogContent.displayName = DialogPrimitive.Content.displayName
+
+const DialogHeader = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn(
+      "flex flex-col space-y-1.5 text-center sm:text-left",
+      className
+    )}
+    {...props}
+  />
+)
+DialogHeader.displayName = "DialogHeader"
+
+const DialogFooter = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn(
+      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      className
+    )}
+    {...props}
+  />
+)
+DialogFooter.displayName = "DialogFooter"
+
+const DialogTitle = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Title>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Title
+    ref={ref}
+    className={cn(
+      "text-lg font-semibold leading-none tracking-tight",
+      className
+    )}
+    {...props}
+  />
+))
+DialogTitle.displayName = DialogPrimitive.Title.displayName
+
+const DialogDescription = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Description>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Description
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
+))
+DialogDescription.displayName = DialogPrimitive.Description.displayName
+
+export {
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogTrigger,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+}
+
+
+
+// ==== file path: repos/gastrader/linkdle/components/ui/label.tsx
+"use client";
+
+import * as React from "react";
+import * as LabelPrimitive from "@radix-ui/react-label";
+import { cva, type VariantProps } from "class-variance-authority";
+
+import { cn } from "@/lib/utils";
+
+const labelVariants = cva(
+  "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+);
+
+const Label = React.forwardRef<
+  React.ElementRef<typeof LabelPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> &
+    VariantProps<typeof labelVariants>
+>(({ className, ...props }, ref) => (
+  <LabelPrimitive.Root
+    ref={ref}
+    className={cn(labelVariants(), className)}
+    {...props}
+  />
+));
+Label.displayName = LabelPrimitive.Root.displayName;
+
+export { Label };
+
+
+
+// ==== file path: repos/gastrader/linkdle/components/ui/switch.tsx
+"use client"
+
+import * as React from "react"
+import * as SwitchPrimitives from "@radix-ui/react-switch"
+
+import { cn } from "@/lib/utils"
+
+const Switch = React.forwardRef<
+  React.ElementRef<typeof SwitchPrimitives.Root>,
+  React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>
+>(({ className, ...props }, ref) => (
+  <SwitchPrimitives.Root
+    className={cn(
+      "peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input",
+      className
+    )}
+    {...props}
+    ref={ref}
+  >
+    <SwitchPrimitives.Thumb
+      className={cn(
+        "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0"
+      )}
+    />
+  </SwitchPrimitives.Root>
+))
+Switch.displayName = SwitchPrimitives.Root.displayName
+
+export { Switch }
+
+
+
+// ==== file path: repos/gastrader/linkdle/components/ui/toast.tsx
+"use client";
+
+import * as React from "react";
+import { Cross2Icon } from "@radix-ui/react-icons";
+import * as ToastPrimitives from "@radix-ui/react-toast";
+import { cva, type VariantProps } from "class-variance-authority";
+
+import { cn } from "@/lib/utils";
+
+const ToastProvider = ToastPrimitives.Provider;
+
+const ToastViewport = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Viewport>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Viewport>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Viewport
+    ref={ref}
+    className={cn(
+      " fixed top-0 left-[50%] z-[100] flex max-h-screen w-full translate-x-[-50%] flex-col-reverse p-4 sm:right-0 sm:flex-col md:max-w-[420px] ",
+      className
+    )}
+    {...props}
+  />
+));
+ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
+
+const toastVariants = cva(
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-2 overflow-hidden rounded-md border p-4 pr-6 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-top-full",
+  {
+    variants: {
+      variant: {
+        default: "border bg-background text-foreground",
+        success:
+          "success group border-emerald-600 bg-emerald-800/80 text-emerald-200",
+        destructive:
+          "destructive group border-destructive bg-destructive text-destructive-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+);
+
+const Toast = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Root>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
+    VariantProps<typeof toastVariants>
+>(({ className, variant, ...props }, ref) => {
+  return (
+    <ToastPrimitives.Root
+      ref={ref}
+      className={cn(toastVariants({ variant }), className)}
+      {...props}
+    />
+  );
+});
+Toast.displayName = ToastPrimitives.Root.displayName;
+
+const ToastAction = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Action>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Action>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Action
+    ref={ref}
+    className={cn(
+      "inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium transition-colors hover:bg-secondary focus:outline-none focus:ring-1 focus:ring-ring disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-muted/40 group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-destructive",
+      className
+    )}
+    {...props}
+  />
+));
+ToastAction.displayName = ToastPrimitives.Action.displayName;
+
+const ToastClose = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Close>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Close>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Close
+    ref={ref}
+    className={cn(
+      "absolute right-1 top-1 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-1 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
+      className
+    )}
+    toast-close=""
+    {...props}
+  >
+    <Cross2Icon className="h-4 w-4" />
+  </ToastPrimitives.Close>
+));
+ToastClose.displayName = ToastPrimitives.Close.displayName;
+
+const ToastTitle = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Title>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Title>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Title
+    ref={ref}
+    className={cn("text-sm font-semibold [&+div]:text-xs", className)}
+    {...props}
+  />
+));
+ToastTitle.displayName = ToastPrimitives.Title.displayName;
+
+const ToastDescription = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Description>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Description>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Description
+    ref={ref}
+    className={cn("text-sm opacity-90", className)}
+    {...props}
+  />
+));
+ToastDescription.displayName = ToastPrimitives.Description.displayName;
+
+type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>;
+
+type ToastActionElement = React.ReactElement<typeof ToastAction>;
+
+export {
+  type ToastProps,
+  type ToastActionElement,
+  ToastProvider,
+  ToastViewport,
+  Toast,
+  ToastTitle,
+  ToastDescription,
+  ToastClose,
+  ToastAction,
+};
+
+
+
+// ==== file path: repos/gastrader/linkdle/components/ui/toaster.tsx
+"use client"
+
+import { useToast } from "@/hooks/use-toast"
+import {
+  Toast,
+  ToastClose,
+  ToastDescription,
+  ToastProvider,
+  ToastTitle,
+  ToastViewport,
+} from "@/components/ui/toast"
+
+export function Toaster() {
+  const { toasts } = useToast()
+
+  return (
+    <ToastProvider>
+      {toasts.map(function ({ id, title, description, action, ...props }) {
+        return (
+          <Toast key={id} {...props}>
+            <div className="grid gap-1">
+              {title && <ToastTitle>{title}</ToastTitle>}
+              {description && (
+                <ToastDescription>{description}</ToastDescription>
+              )}
+            </div>
+            {action}
+            <ToastClose />
+          </Toast>
+        )
+      })}
+      <ToastViewport />
+    </ToastProvider>
+  )
+}
+
+
+
+// ==== file path: repos/gastrader/linkdle/hooks/use-toast.ts
+"use client"
+
+// Inspired by react-hot-toast library
+import * as React from "react"
+
+import type {
+  ToastActionElement,
+  ToastProps,
+} from "@/components/ui/toast"
+
+const TOAST_LIMIT = 1
+const TOAST_REMOVE_DELAY = 1000000
+
+type ToasterToast = ToastProps & {
+  id: string
+  title?: React.ReactNode
+  description?: React.ReactNode
+  action?: ToastActionElement
+}
+
+const actionTypes = {
+  ADD_TOAST: "ADD_TOAST",
+  UPDATE_TOAST: "UPDATE_TOAST",
+  DISMISS_TOAST: "DISMISS_TOAST",
+  REMOVE_TOAST: "REMOVE_TOAST",
+} as const
+
+let count = 0
+
+function genId() {
+  count = (count + 1) % Number.MAX_SAFE_INTEGER
+  return count.toString()
+}
+
+type ActionType = typeof actionTypes
+
+type Action =
+  | {
+      type: ActionType["ADD_TOAST"]
+      toast: ToasterToast
+    }
+  | {
+      type: ActionType["UPDATE_TOAST"]
+      toast: Partial<ToasterToast>
+    }
+  | {
+      type: ActionType["DISMISS_TOAST"]
+      toastId?: ToasterToast["id"]
+    }
+  | {
+      type: ActionType["REMOVE_TOAST"]
+      toastId?: ToasterToast["id"]
+    }
+
+interface State {
+  toasts: ToasterToast[]
+}
+
+const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+
+const addToRemoveQueue = (toastId: string) => {
+  if (toastTimeouts.has(toastId)) {
+    return
+  }
+
+  const timeout = setTimeout(() => {
+    toastTimeouts.delete(toastId)
+    dispatch({
+      type: "REMOVE_TOAST",
+      toastId: toastId,
+    })
+  }, TOAST_REMOVE_DELAY)
+
+  toastTimeouts.set(toastId, timeout)
+}
+
+export const reducer = (state: State, action: Action): State => {
+  switch (action.type) {
+    case "ADD_TOAST":
+      return {
+        ...state,
+        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
+      }
+
+    case "UPDATE_TOAST":
+      return {
+        ...state,
+        toasts: state.toasts.map((t) =>
+          t.id === action.toast.id ? { ...t, ...action.toast } : t
+        ),
+      }
+
+    case "DISMISS_TOAST": {
+      const { toastId } = action
+
+      // ! Side effects ! - This could be extracted into a dismissToast() action,
+      // but I'll keep it here for simplicity
+      if (toastId) {
+        addToRemoveQueue(toastId)
+      } else {
+        state.toasts.forEach((toast) => {
+          addToRemoveQueue(toast.id)
+        })
+      }
+
+      return {
+        ...state,
+        toasts: state.toasts.map((t) =>
+          t.id === toastId || toastId === undefined
+            ? {
+                ...t,
+                open: false,
+              }
+            : t
+        ),
+      }
+    }
+    case "REMOVE_TOAST":
+      if (action.toastId === undefined) {
+        return {
+          ...state,
+          toasts: [],
+        }
+      }
+      return {
+        ...state,
+        toasts: state.toasts.filter((t) => t.id !== action.toastId),
+      }
+  }
+}
+
+const listeners: Array<(state: State) => void> = []
+
+let memoryState: State = { toasts: [] }
+
+function dispatch(action: Action) {
+  memoryState = reducer(memoryState, action)
+  listeners.forEach((listener) => {
+    listener(memoryState)
+  })
+}
+
+type Toast = Omit<ToasterToast, "id">
+
+function toast({ ...props }: Toast) {
+  const id = genId()
+
+  const update = (props: ToasterToast) =>
+    dispatch({
+      type: "UPDATE_TOAST",
+      toast: { ...props, id },
+    })
+  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
+
+  dispatch({
+    type: "ADD_TOAST",
+    toast: {
+      ...props,
+      id,
+      open: true,
+      onOpenChange: (open) => {
+        if (!open) dismiss()
+      },
+    },
+  })
+
+  return {
+    id: id,
+    dismiss,
+    update,
+  }
+}
+
+function useToast() {
+  const [state, setState] = React.useState<State>(memoryState)
+
+  React.useEffect(() => {
+    listeners.push(setState)
+    return () => {
+      const index = listeners.indexOf(setState)
+      if (index > -1) {
+        listeners.splice(index, 1)
+      }
+    }
+  }, [state])
+
+  return {
+    ...state,
+    toast,
+    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
+  }
+}
+
+export { useToast, toast }
+
+
+
+// ==== file path: repos/gastrader/linkdle/lib/utils.ts
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
+
+
+// ==== file path: repos/gastrader/linkdle/tailwind.config.ts
+import type { Config } from "tailwindcss";
+
+const config: Config = {
+    darkMode: ["class"],
+    content: [
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+  	extend: {
+  		colors: {
+  			background: 'hsl(var(--background))',
+  			foreground: 'hsl(var(--foreground))',
+  			card: {
+  				DEFAULT: 'hsl(var(--card))',
+  				foreground: 'hsl(var(--card-foreground))'
+  			},
+  			popover: {
+  				DEFAULT: 'hsl(var(--popover))',
+  				foreground: 'hsl(var(--popover-foreground))'
+  			},
+  			primary: {
+  				DEFAULT: 'hsl(var(--primary))',
+  				foreground: 'hsl(var(--primary-foreground))'
+  			},
+  			secondary: {
+  				DEFAULT: 'hsl(var(--secondary))',
+  				foreground: 'hsl(var(--secondary-foreground))'
+  			},
+  			muted: {
+  				DEFAULT: 'hsl(var(--muted))',
+  				foreground: 'hsl(var(--muted-foreground))'
+  			},
+  			accent: {
+  				DEFAULT: 'hsl(var(--accent))',
+  				foreground: 'hsl(var(--accent-foreground))'
+  			},
+  			destructive: {
+  				DEFAULT: 'hsl(var(--destructive))',
+  				foreground: 'hsl(var(--destructive-foreground))'
+  			},
+  			border: 'hsl(var(--border))',
+  			input: 'hsl(var(--input))',
+  			ring: 'hsl(var(--ring))',
+  			chart: {
+  				'1': 'hsl(var(--chart-1))',
+  				'2': 'hsl(var(--chart-2))',
+  				'3': 'hsl(var(--chart-3))',
+  				'4': 'hsl(var(--chart-4))',
+  				'5': 'hsl(var(--chart-5))'
+  			}
+  		},
+  		borderRadius: {
+  			lg: 'var(--radius)',
+  			md: 'calc(var(--radius) - 2px)',
+  			sm: 'calc(var(--radius) - 4px)'
+  		}
+  	}
+  },
+  plugins: [require("tailwindcss-animate")],
+};
+export default config;
+
+
